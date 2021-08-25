@@ -1,140 +1,143 @@
-%%this routine extracts the calculated bridge features and does novelty
-%%and POE analysis to detect and assess damage
+%%This routine 
+% 1. extracts the calculated bridge features 
+% 2. runs novelty detection
+% 3. runs POE analysis 
+%  to detect and assess damage
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% developed by Sifat Sharmeen Muin on 07/24/2020
-% clear console
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% clear console
 close all
 clear all
 clc
-%% Input Bridge infomation
-struc_folder='Bridge_A';%structure folder
 
 %% read data
-Dir_base = 'C:\Users\Sifat Muin\Dropbox\Project_CSMIP_2019';%Parent folder
+Dir_base = 'C:\Users\Sifat Muin\Dropbox\Project_CSMIP_2019';    %Parent folder
 addpath(strcat(Dir_base,'\H-MC_codes'));
-out_data=xlsread('ExtractedFeatures_7LS_Avg.xlsx');
-out_data=out_data(3:15,:);
+out_data=xlsread('ExtractedFeatures_7LS_Avg.xlsx');             %database of features from recorded data
+out_data=out_data(3:15,:);                                      %MLO data from row 3 to last
+
 %% extract features for bridge structure
-X=out_data(:,[3,4,6,7,8,9]);%all features
-X_D0=X(out_data(:,10)==0,:);%undamaged condition DS0
-X_D1=X(out_data(:,10)==1,:);%Minor damage condition DS1
-X_D2=X(out_data(:,10)==2,:);%Moderate damage condition DS2
-X_D3=X(out_data(:,10)==3,:);%extensive damage condition DS3
-X_D4=X(out_data(:,10)==4,:);%extensive damage condition DS4
-X_D5=X(out_data(:,10)==5,:);%extensive damage condition DS5
-%X_D6=X(out_data(:,9)==6,:);%extensive damage condition DS3
+X=out_data(:,[3,4,6,7,8,9]); %all features
+X_D0=X(out_data(:,10)==0,:); %undamaged condition DS0
+X_D1=X(out_data(:,10)==1,:); %Minor damage condition DS1
+X_D2=X(out_data(:,10)==2,:); %Moderate damage condition DS2
+X_D3=X(out_data(:,10)==3,:); %extensive damage condition DS3
+X_D4=X(out_data(:,10)==4,:); %extensive damage condition DS4
+X_D5=X(out_data(:,10)==5,:); %extensive damage condition DS5
+%X_D6=X(out_data(:,9)==6,:); %extensive damage condition DS3
 %length of each damage state
-N=size(X_D0,1);%DS0
-ND1=size(X_D1,1);%DS1
-ND2=size(X_D2,1);%DS2
-ND3=size(X_D3,1);%DS3
-ND4=size(X_D4,1);%DS3
-ND5=size(X_D5,1);%DS3
+N=size(X_D0,1);     %DS0
+ND1=size(X_D1,1);   %DS1
+ND2=size(X_D2,1);   %DS2
+ND3=size(X_D3,1);   %DS3
+ND4=size(X_D4,1);   %DS3
+ND5=size(X_D5,1);   %DS3
+
 %% Divide into tratining set and test set
-N_tr=round(0.5*N);%75% training and 25% testing data from undamaged condition
-N_test_D0=N-N_tr;
+N_tr=round(0.5*N);  %Number of training data (50% training and 50% testing data from undamaged condition)
+N_test_D0=N-N_tr;   %Number of testing data
+
 %randomly select test data
 p=1:1:N;
-p_test = randperm(N,N_test_D0);
-%p_test=load('ptest.mat').p_test;% the random indices saved in the matrix
-p_tr=setdiff(p,p_test);
-X_training=X_D0(p_tr,:);
-X_test_D0=X_D0(p_test,:);
-%pd1_test = randperm(ND1,100);
-%pd4_test = randperm(ND4,18);
-X_test=[X_D0;X_D1;X_D2;X_D3;X_D4;X_D5];
-%X_test=load('xtest.mat').X_test;
-N_test=size(X_test,1);
+p_test = randperm(N,N_test_D0); %randomized test indices
+p_tr=setdiff(p,p_test);         %training indices
+X_training=X_D0(p_tr,:);        %selected training samples
+
+
+X_test=X;               %test al recorded data
+N_test=size(X_test,1);  %length of test data
+
 %extract output vector for test set
-tag=zeros(size(X_test,1),1);
-tag((N_test_D0+1):N_test)=0;%binary output for damage detection
-tag_test=tag;
-%tag_test((N_test_D0+100+1))=3;
-%tag_test((N_test_D0+100+1+1):(N_test_D0+100+1+18))=4;
-%tag_test((N_test_D0+100+1+18+1):N_test)=5;%for damage assessment
-%% Novelty
-%% train the model
-%k fold validation k=5 
-N_v=round(N_tr/5);%diving the training set into k strips
+    tag_test=out_data(:,10);    %binary output for damage detection
+
+%%  Novelty Detection
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Model Training
+
+    %   k fold cross validation k=5 
+    N_v=round(N_tr/5);          %diving the training set into k strips
 for j=1:5
     %train
-    p_v=(N_v*(j-1)+1):1:N_v*j;%validation strip indcies
-    p_tr_s=1:1:N_tr;%full training set indices
-    p_t=setdiff(p_tr_s,p_v);%reduced training strip indices
-    X_tr=X_training(p_t,:);%reduced training set
-    X_v=X_training(p_v,:);%validation set
-    N_tr_s=length(p_t);%length of training set
+    p_v=(N_v*(j-1)+1):1:N_v*j;  %validation strip indcies
+    p_tr_s=1:1:N_tr;            %full training set indices
+    p_t=setdiff(p_tr_s,p_v);    %reduced training strip indices
+    X_tr=X_training(p_t,:);     %reduced training set
+    X_v=X_training(p_v,:);      %validation set
+    N_tr_s=length(p_t);         %length of training set
     for k=1:50
-    alpha(1,j)=0.5;%initial critical p value
-    beta(j)=chi2inv(1-alpha(k,j),4);%threshold Mahalobis distance
-    MD2=mahal(X_tr,X_tr);%square of mahalobis distance of the reduced training set
-    label_nov_tr=MD2>beta(j);%detected novellty of the reduced training set
-    z=zeros(N_tr_s,1);% output of the reduced training set; all zeros
-    L(k,j)=sqrt(mse(label_nov_tr,z));%loss function
-        c=-1;
-        if k>1
-            if L(k,j)>L(k-1,j)
-                c=1;
-            end
-        end
-    alpha(k+1,j)=alpha(k,j)-2*1/N_tr_s*L(k,j)*c;%updated critical p value
+        alpha(1,j)=0.5;                 %initial critical p value
+        beta(j)=chi2inv(1-alpha(k,j),4);%threshold Mahalobis distance
+        MD2=mahal(X_tr,X_tr);           %square of mahalobis distance of the reduced training set
+        label_nov_tr=MD2>beta(j);       %detected novellty of the reduced training set
+        z=zeros(N_tr_s,1);              % output of the reduced training set; all zeros
+            L(k,j)=sqrt(mse(label_nov_tr,z));   %loss function
+            
+            % Compare loss function and update alpha
+                c=-1;
+                if k>1
+                    if L(k,j)>L(k-1,j)
+                    c=1;
+                    end
+                end
+            alpha(k+1,j)=alpha(k,j)-2*1/N_tr_s*L(k,j)*c;    %updated critical p value
 
     end
-%validate
-MD2_v=mahal(X_v,X_tr);%square of mahalobis distance of the validation set
-label_nov_v=MD2_v>(chi2inv(1-alpha(end,j),4));%detected novellty of the validation set
-  z_v=zeros(N_v,1);
-  Acc_M1_v(j)=length(find(label_nov_v==z_v))/N_v*100; %accuracy for the jth split
-  %%loss calculation 
-  L_tr(j)=L(k,j);%loss for reduced training set of j split
-  L_v(j)=sqrt(mse(label_nov_v,z_v));%loss for validation set of j split
-end
-y=[L_tr; L_v];
-Val_acc=mean(Acc_M1_v)%mean validation accuracy 
-[~,index]=(max(Acc_M1_v))
+    %validate
+    MD2_v=mahal(X_v,X_tr);                          %square of mahalobis distance of the validation set
+    label_nov_v=MD2_v>(chi2inv(1-alpha(end,j),4));  %detected novellty of the validation set
+    z_v=zeros(N_v,1);                               %output of the validation set; all zeros.
+    
+    Acc_M1_v(j)=length(find(label_nov_v==z_v))/N_v*100;     %accuracy for the jth split
 
-%% Plot training and validation loss
-cat=categorical({'Traning', 'Validation'})
-bar(y')
-legend('Traning Loss', 'Validation Loss')
-xlabel('Run Number'); ylabel('Loss');
-ylim([0 1])
-text(1.2,0.8,strcat('Average validation accuracy =',num2str(Val_acc),'%'))
+end
+
+Val_acc=mean(Acc_M1_v)      %mean validation accuracy 
+[~,index]=(max(Acc_M1_v))   %split number that provides highest accuracy
+
 %% Finalize model parameter
 
  Th=chi2inv(mean(alpha(end,:)),4);%critical value for 4 df chi squared distribution for P=alpha
   
 %% % test model %%%%%%%%%%%%%%%%%%%%%%%
-
-  %performance on overall test set
- MD2_D=mahal(X_test,X_training);%Mahalonobis distance
- label_nov_test=zeros(size(X_test,1),1);
-
- for m=1:N_test
-     if MD2_D(m)> Th
+    % predict
+    
+        MD2_D=mahal(X_test,X_training);                 %Mahalonobis distance
+        label_nov_test=zeros(size(X_test,1),1);         %create a vector for predicted outputs
+    
+        %loop to check with threshold distance
+        for m=1:N_test
+            if MD2_D(m)> Th
                  label_nov_test(m)=1; 
-     end
- end
-   Acc_M1=length(find(label_nov_test==tag))/N_test*100 %accuracy for novelty detection
-   cMat(tag,label_nov_test)%confusion matrix for novelty detection
+            end
+        end
+        
+   % evaluate accuracy    
+   Acc_M1=length(find(label_nov_test==tag))/N_test*100  %accuracy for novelty detection
+   cMat(tag,label_nov_test)                             %confusion matrix for novelty detection
 %% tsne visualization
-Y=tsne(X_test);
+
+    Y=tsne(X_test);
 figure
-gscatter(Y(:,1),Y(:,2),tag,'gr')
-xlabel('tSNE_1'); ylabel('tSNE_2');
-title("Actual Damage States")
-legend("Undamaged","Damaged")
+    gscatter(Y(:,1),Y(:,2),tag,'gr')
+    xlabel('tSNE_1'); ylabel('tSNE_2');
+    title("Actual Damage States")
+    legend("Undamaged","Damaged")
 figure
-gscatter(Y(:,1),Y(:,2),label_nov_test,'gr');
-xlabel('tSNE_1'); ylabel('tSNE_2');
-title("Predicted Damage States with Novelty Detection")
-legend("Undamaged","Damaged")
- %% POE envelope
+    gscatter(Y(:,1),Y(:,2),label_nov_test,'gr');
+    xlabel('tSNE_1'); ylabel('tSNE_2');
+    title("Predicted Damage States with Novelty Detection")
+    legend("Undamaged","Damaged")
+    
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% POE envelope
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
  %% extract data from the SDOF analysisresults
-outfile2='POE_Features-500MLO_update.xlsx';
-out_data2=xlsread(outfile2);
-tag_a=out_data2(:,8);%output damage information 
-X_a=out_data2(:,[1,2,4,5,6,7]);%selected features
-N_a=size(X_a,1);%%length of analytical data
+    outfile2='POE_Features-500MLO_update.xlsx'; %File with SDOF features
+    out_data2=xlsread(outfile2);
+    tag_a=out_data2(:,8);                       %output damage information 
+    X_a=out_data2(:,[1,2,4,5,6,7]);             %selected features
+    N_a=size(X_a,1);                            %%length of analytical data
 
 %% statistical information of the analytical data
 X_ad=X_a((tag_a>0),:);%all damage data
@@ -160,122 +163,117 @@ s_ad=cov(X_ad);
 
 %% train the POE model 
 
-I=tag_a>0;%indicator vactor for damaged events
+I=tag_a>0;              %indicator vactor for damaged events
 %k fold validation k=5 
-    p_a=1:1:N_a;%all indices of training set
-    Na_v=round(N_a/5);%dividing the training set into 5 splits
+    p_a=1:1:N_a;        %all indices of training set
+    Na_v=round(N_a/5);  %dividing the training set into 5 splits
 
     for j=1:5
-        p_a_v=(Na_v*(j-1)+1):1:Na_v*j;%validation strip indcies
-        p_a_tr=setdiff(p_a,p_a_v);%reduced  training set indices
-        Xa_tr=X_a(p_a_tr,:);% reduced training set for jth fold
-        Xa_v=X_a(p_a_v,:);%validation set for jth fold
-        Na_tr=length(p_a_tr);%length of the training set
+        p_a_v=(Na_v*(j-1)+1):1:Na_v*j;      %validation strip indcies
+        p_a_tr=setdiff(p_a,p_a_v);          %reduced  training set indices
+        Xa_tr=X_a(p_a_tr,:);                % reduced training set for jth fold
+        Xa_v=X_a(p_a_v,:);                  %validation set for jth fold
+        Na_tr=length(p_a_tr);               %length of the training set
         for k=1:25
-            a(1,j)=0.2;%initial threshold probability for undamaged events
-            b(1,j)=.5;% initial scaling factor for the bandwidth vector
-            h=std(X_a)*b(k);%bandwidth vecor for kernel density
-            I_tr=I(p_a_tr);%indicator vector for the reduced training set
+            a(1,j)=0.2;             %initial threshold probability for undamaged events
+            b(1,j)=.5;              % initial scaling factor for the bandwidth vector
+            h=std(X_a)*b(k);        %bandwidth vecor for kernel density
+            I_tr=I(p_a_tr);         %indicator vector for the reduced training set
+            
             %train
                 for i=1:Na_tr
-                    dist_tr=(Xa_tr-Xa_tr(i,:)).^2/(2*h.^2);
-                    if sum(exp(-dist_tr))==0
+                    dist_tr=(Xa_tr-Xa_tr(i,:)).^2/(2*h.^2);         %distance calc
+                    if sum(exp(-dist_tr))==0                        %Probabilty of Exceedance calculation
                         POE_tr(i)=1;
                     else
-                    POE_tr(i)=sum(I_tr.*(exp(-dist_tr)))/sum((exp(-dist_tr)));%POE estimate
+                        POE_tr(i)=sum(I_tr.*(exp(-dist_tr)))/sum((exp(-dist_tr)));%POE estimate
                     end
                 end
              %training set test   
-            label_POE_tr=zeros(size(Xa_tr,1),1);
-                for m=1:Na_tr
-                    if POE_tr(m)> a(k,j)
-                        label_POE_tr(m)=1;
-                    end
-                end
-            L_POE(k,j)=sqrt(mse(label_POE_tr,I_tr));%loss function
-            c=-1;
-                if k>1
-                    if L_POE(k,j)>L_POE(k-1,j)
-                        c=1;
-                    end
-                end
-                if abs(L_POE(k,j)) < 0.2
-                    a(k+1,j)=a(k,j);
-                    b(k+1,j)=b(k,j);
-            
-                else
-        a(k+1,j)=a(k,j)-0.2*L_POE(k,j)*c;%updated threshold probability for undamaged events
-        b(k+1,j)=b(k,j)+0.2*L_POE(k,j)*c;%updated scaling factor for the bandwidth vector
-                end
+                    label_POE_tr=zeros(size(Xa_tr,1),1);    %create predicted output vector
+                    
+                        for m=1:Na_tr
+                            if POE_tr(m)> a(k,j)    %check with threshold probability
+                                label_POE_tr(m)=1;  %predict output
+                            end
+                        end
+                     %calculated loss and update threshold
+                        L_POE(k,j)=sqrt(mse(label_POE_tr,I_tr));%loss function
+                         c=-1;
+                          if k>1
+                            if L_POE(k,j)>L_POE(k-1,j)
+                                     c=1;
+                            end
+                          end
+                          
+                            if abs(L_POE(k,j)) < 0.2
+                                a(k+1,j)=a(k,j);                %updated threshold probability for undamaged events
+                                b(k+1,j)=b(k,j);                %updated scaling factor for the bandwidth vector
+                            else
+                                a(k+1,j)=a(k,j)-0.2*L_POE(k,j)*c;   %updated threshold probability for undamaged events
+                                b(k+1,j)=b(k,j)+0.2*L_POE(k,j)*c;   %updated scaling factor for the bandwidth vector
+                            end
         end
-%validate
-    I_v=I(p_a_v);%indicator vector for validation set
-    %validation set test
-    label_POE_v=zeros(Na_v,1);
-        for m=1:Na_v
-            POE_v(m)=sum(I_tr.*(exp(-(Xa_tr-Xa_v(m,:)).^2/(2*h.^2))))/sum((exp(-(Xa_tr-Xa_v(m,:)).^2/(2*h.^2))));
-                if POE_v(m)>a(end,j)
-                    label_POE_v(m)=1;
-                end
-        end
-  Acc_M2_v(j)=length(find(label_POE_v==I_v))/Na_v*100; %accuracy for the jth split
-  %%error calculation 
-  L_tr(j)=L_POE(k,j);%trainng loss
-  L_v(j)=sqrt(mse(label_POE_v,I_v));%validation loss
+    %validate
+            I_v=I(p_a_v);%indicator vector for validation set
+             %validation set test
+            label_POE_v=zeros(Na_v,1);          %create predicted output vector
+                 for m=1:Na_v
+                     POE_v(m)=sum(I_tr.*(exp(-(Xa_tr-Xa_v(m,:)).^2/(2*h.^2))))/sum((exp(-(Xa_tr-Xa_v(m,:)).^2/(2*h.^2)))); %Probabilty of Exceedance calculation
+                        if POE_v(m)>a(end,j)        %check with threshold probability
+                            label_POE_v(m)=1;       %predict output
+                        end
+                 end
+        Acc_M2_v(j)=length(find(label_POE_v==I_v))/Na_v*100; %accuracy for the jth split
+        %%error calculation 
+         L_tr(j)=L_POE(k,j);                %trainng loss
+         L_v(j)=sqrt(mse(label_POE_v,I_v)); %validation loss
     end
 clear y
-y=[L_tr; L_v]
+
 Val_acc=mean(Acc_M2_v)%average validationaccuracy
 [~,index]=(max(Acc_M2_v))
-%% Plot training and validation loss
-figure
-cat=categorical({'Traning', 'Validation'})
-bar(y')
-legend('Traning Loss', 'Validation Loss')
-xlabel('Run Number'); ylabel('Loss');
-ylim([0 0.5])
-text(1.2,0.45,strcat('Average validation accuracy =',num2str(Val_acc),'%'))
-%saveas(gcf,'Figures/Loss_feature-POE.jpg')
 
 %% finalize the model parameters
 Th_POE=mean(a(end,:));%threshold probability value
 h=std(X_a)*mean(b(end,:));%bandwitdth matrix
 
 for i=1:N_a
-    POE(i)=sum(I.*(exp(-((X_a-X_a(i,:)).^2/(2*h.^2))))/sum(exp(-(X_a-X_a(i,:)).^2/(2*h.^2))));
+    POE(i)=sum(I.*(exp(-((X_a-X_a(i,:)).^2/(2*h.^2))))/sum(exp(-(X_a-X_a(i,:)).^2/(2*h.^2)))); %final POE valuesof the SDOF set
 end  
 
 %% test damage detection
-
-for j=1:N_test
-    dist_test=(X_a-X_test(j,:)).^2/(2*h.^2);
-    if sum(exp(-dist_test))==0
-        POE_test(j)=1;
-    else
-    POE_test(j)=sum(I.*(exp(-dist_test)))/sum((exp(-dist_test)));%POE values for the test set
-    end
-end
-label_POE_test=zeros(size(X_test,1),1);
-
- for m=1:N_test
-    if label_nov_test(m)==1% for the test samples that were detected as novelty
-        if POE_test(m)> Th_POE
-                 label_POE_test(m)=1; 
-        else
-         label_POE_test(m)=0;
+    %calculate POE of damage detection for test set
+        for j=1:N_test
+             dist_test=(X_a-X_test(j,:)).^2/(2*h.^2);
+                if sum(exp(-dist_test))==0
+                    POE_test(j)=1;
+                else
+                    POE_test(j)=sum(I.*(exp(-dist_test)))/sum((exp(-dist_test)));%POE values for the test set
+                end
         end
-    else
-        label_POE_test(m)=0;
-    end
- end
+    label_POE_test=zeros(size(X_test,1),1); %create output vector
 
-    Acc_M2=length(find(label_POE_test==tag))/N_test*100 %accuracy achieved by the platform
-   cMat(tag,label_POE_test)%confusion matrix
+    for m=1:N_test
+        if label_nov_test(m)==1         % for the test samples that were detected as novelty
+            if POE_test(m)> Th_POE      %check with the threashold POE
+                 label_POE_test(m)=1; 
+            else
+                label_POE_test(m)=0;
+            end
+        else
+                label_POE_test(m)=0;
+        end
+    end
+%% Results
+    Acc_M2=length(find(label_POE_test==tag))/N_test*100 %accuracy achieved by the platform; printed on console
+    cMat(tag,label_POE_test)                            %confusion matrix
+   %tSNE visualization 
    figure
-gscatter(Y(:,1),Y(:,2),label_POE_test,'gr');
-xlabel('tSNE_1'); ylabel('tSNE_2');
-title("Predicted Damage States with H-MC")
-legend("Undamaged","Damaged")
+        gscatter(Y(:,1),Y(:,2),label_POE_test,'gr');
+        xlabel('tSNE_1'); ylabel('tSNE_2');
+        title("Predicted Damage States with H-MC")
+        legend("Undamaged","Damaged")
 %% train damage assessment model
 I_d1=tag_a==1;
 I_d2=tag_a==2;
@@ -399,109 +397,7 @@ for m=1:N_test
 Acc_M2_D=length(find(label_POE_DA_test==tag_test))/N_test*100 %accuracy for damage assessment
 cMat6(tag_test,label_POE_DA_test)%confusion matrix for damage assessment
 
-%% write the results
-B=[X_a POE'];
-writematrix(B,strcat('Features-POE-SDOF',num2str(N_a),'.xlsx'));
-C=[X_test tag_test label_POE_DA_test];
-writematrix(C,strcat('Bridge_testset_DamageDetection',num2str(N_test),'.xlsx'));
+%% write the actual and predicted results (optional)
 
-% %% Test SanSimeon data
-% SanSimeon36668 = readmatrix('ExtractedFeaturesSanSimeon36668.xlsx');
-% X_test_1= SanSimeon36668(:,[2,5,6,1]);
-% %Novelty
-% MD2_test_1=mahal(X_test_1,X_training);%Mahalonobis distance
-%  label_nov_test_1=zeros(size(X_test_1,1),1);
-% 
-%  for m=1:2
-%      if MD2_test_1(m)> Th
-%                  label_nov_test_1(m)=1; 
-%      end
-%  end
-% %POE detection
-%  Th_POE=mean(a(end,:));%threshold probability value
-% h=std(X_a)*mean(b(end,:));%bandwitdth matrix
-% for j=1:2
-%     dist_test=(X_a-X_test_1(j,:)).^2/(2*h.^2);
-%     if sum(exp(-dist_test))==0
-%         POE_test_1(j)=1;
-%     else
-%     POE_test_1(j)=sum(I.*(exp(-dist_test)))/sum((exp(-dist_test)));%POE values for the test set
-%     end
-% end
-% label_POE_test_1=zeros(size(X_test_1,1),1);
-% 
-%  for m=1:2
-%     if label_nov_test_1(m)==1% for the test samples that were detected as novelty
-%         if POE_test_1(m)> Th_POE
-%                  label_POE_test_1(m)=1; 
-%         else
-%          label_POE_test_1(m)=0;
-%         end
-%     else
-%         label_POE_test_1(m)=0;
-%     end
-%  end
-% 
-%  %% Test Parkfield data
-% Parkfield36668 = readmatrix('ExtractedFeaturesParkfield36668.xlsx');
-% X_test_2= Parkfield36668(:,[2,5,6,1]);
-% %Novelty
-% MD2_test_2=mahal(X_test_2,X_training);%Mahalonobis distance
-%  label_nov_test_2=zeros(size(X_test_2,1),1);
-% 
-%  for m=1:2
-%      if MD2_test_2(m)> Th
-%                  label_nov_test_2(m)=1; 
-%      end
-%  end
-%  
-%  %% POE for parkfield bridge
-%   %% extract data from the SDOF analysisresults
-% outfile2='POE_Features-1000.xlsx';
-% out_data2=xlsread(outfile2);
-% tag_a=out_data2(:,7);%output damage information 
-% X_a=out_data2(:,[2,5,6,1]);%selected features
-% N_a=size(X_a,1);%%length of analytical data
-% 
-% %POE detection
-%  Th_POE=mean(a(end,:));%threshold probability value
-% h=std(X_a)*mean(b(end,:));%bandwitdth matrix
-% for j=1:2
-%     dist_test=(X_a-X_test_2(j,:)).^2/(2*h.^2);
-%     if sum(exp(-dist_test))==0
-%         POE_test_2(j)=1;
-%     else
-%     POE_test_2(j)=sum(I.*(exp(-dist_test)))/sum((exp(-dist_test)));%POE values for the test set
-%     end
-% end
-% label_POE_test_2=zeros(size(X_test_2,1),1);
-% 
-%  for m=1:2
-%     if label_nov_test_2(m)==1% for the test samples that were detected as novelty
-%         if POE_test_2(m)> Th_POE
-%                  label_POE_test_2(m)=1; 
-%         else
-%          label_POE_test_2(m)=0;
-%         end
-%     else
-%         label_POE_test_2(m)=0;
-%     end
-%  end
-%  %%POE assessment
-%  
-%   label_POE_DA_test_2=zeros(size(X_test_2,1),1);
-%  for j=1:2
-% POE_test_2_D1(j)=sum(I_d1.*(exp(-(X_a-X_test_2(j,:)).^2/(2*h.^2))))/sum((exp(-(X_a-X_test_2(j,:)).^2/(2*h.^2))));%POE value for DS1
-% POE_test_2_D2(j)=sum(I_d2.*(exp(-(X_a-X_test_2(j,:)).^2/(2*h.^2))))/sum((exp(-(X_a-X_test_2(j,:)).^2/(2*h.^2))));%POE value for DS2
-% POE_test_2_D3(j)=sum(I_d3.*(exp(-(X_a-X_test_2(j,:)).^2/(2*h.^2))))/sum((exp(-(X_a-X_test_2(j,:)).^2/(2*h.^2))));%POE value for DS3
-%   
-%  end
-%  % assign damage state to highest probability value
-% for m=1:2
-%     if label_POE_test_2(m)==1
-%     [~,i2]=max([POE_test_2_D1(m),POE_test_2_D2(m),POE_test_2_D3(m)]);
-%      label_POE_DA_test_2(m)=i2;
-%     else
-%         label_POE_DA_test_2(m)=0;
-%     end
-%  end
+%C=[X_test tag_test label_POE_DA_test];
+%writematrix(C,strcat('Bridge_testset_DamageDetection',num2str(N_test),'.xlsx'));
